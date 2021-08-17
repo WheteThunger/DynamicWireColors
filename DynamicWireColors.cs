@@ -4,14 +4,16 @@ using Newtonsoft.Json.Serialization;
 using Newtonsoft.Json.Converters;
 using Oxide.Core;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 using static WireTool;
 using static IOEntity;
 
 namespace Oxide.Plugins
 {
-    [Info("Dynamic Wire Colors", "WhiteThunder", "1.0.0")]
+    [Info("Dynamic Wire Colors", "WhiteThunder", "1.1.0")]
     [Description("Temporarily changes the color of wires and hoses while they are providing insufficient power or fluid.")]
     internal class DynamicWireColors : CovalencePlugin
     {
@@ -20,6 +22,8 @@ namespace Oxide.Plugins
         private Configuration _pluginConfig;
 
         private const string PermissionUse = "dynamicwirecolors.use";
+
+        private WaitWhile WaitWhileSaving = new WaitWhile(() => SaveRestore.IsSaving);
 
         #endregion
 
@@ -32,35 +36,12 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {
-            foreach (var entity in BaseNetworkable.serverEntities)
-            {
-                var ioEntity = entity as IOEntity;
-                if (ioEntity == null)
-                    continue;
-
-                CopySourceSlotColorsToDestinationSlots(ioEntity);
-                ProcessSourceEntity(ioEntity);
-            }
+            SetupAllEntities(networkUpdate: true, fixDestinationColor: true);
         }
 
         private void Unload()
         {
-            foreach (var entity in BaseNetworkable.serverEntities)
-            {
-                var destinationEntity = entity as IOEntity;
-                if (destinationEntity == null)
-                    continue;
-
-                foreach (var destinationSlot in destinationEntity.inputs)
-                {
-                    IOEntity sourceEntity;
-                    var sourceSlot = GetConnectedSourceSlot(destinationEntity, destinationSlot, out sourceEntity);
-                    if (sourceSlot == null)
-                        continue;
-
-                    ChangeSlotColor(sourceEntity, sourceSlot, destinationSlot.wireColour);
-                }
-            }
+            ResetAllEntities(networkUpdate: true);
         }
 
         private void OnOutputUpdate(IOEntity sourceEntity)
@@ -74,15 +55,24 @@ namespace Oxide.Plugins
             });
         }
 
+        private void OnServerSave()
+        {
+            ServerMgr.Instance.StartCoroutine(ResetColorsWhileSaving());
+        }
+
         #endregion
 
-        #region Helper Methods
+        #region Exposed Hooks
 
         private bool ChangeColorWasBlocked(IOEntity ioEntity, IOSlot slot, WireColour color)
         {
             object hookResult = Interface.CallHook("OnDynamicWireColorChange", ioEntity, slot, color);
             return hookResult is bool && (bool)hookResult == false;
         }
+
+        #endregion
+
+        #region Helper Methods
 
         private IOSlot GetConnectedSourceSlot(IOEntity destinationEntity, IOSlot destinationSlot, out IOEntity sourceEntity)
         {
@@ -114,6 +104,10 @@ namespace Oxide.Plugins
                 if (destinationSlot == null)
                     continue;
 
+                // Note: This intentionally does not check permissions or call a hook because:
+                //   a) It shouldn't be necessary.
+                //   b) It would require that other parts of the plugin do the same checks.
+                // This can be changed if it turns out that some other plugin is using the destination slot color for special reasons.
                 if (destinationSlot.wireColour == WireColour.Default)
                     destinationSlot.wireColour = sourceSlot.wireColour;
             }
@@ -133,13 +127,50 @@ namespace Oxide.Plugins
         private bool EitherEntityHasPermission(IOEntity ioEntity1, IOEntity ioEntity2, string perm) =>
             EntityHasPermission(ioEntity1) || EntityHasPermission(ioEntity2);
 
-        private void ChangeSlotColor(IOEntity sourceEntity, IOSlot sourceSlot, WireColour color)
+        private void ChangeSlotColor(IOEntity ioEntity, IOSlot slot, WireColour color, bool networkUpdate)
         {
-            if (sourceSlot.wireColour == color || ChangeColorWasBlocked(sourceEntity, sourceSlot, color))
+            if (slot.wireColour == color || ChangeColorWasBlocked(ioEntity, slot, color))
                 return;
 
-            sourceSlot.wireColour = color;
-            sourceEntity.SendNetworkUpdate();
+            slot.wireColour = color;
+
+            if (networkUpdate)
+                ioEntity.SendNetworkUpdate();
+        }
+
+        private void SetupAllEntities(bool networkUpdate, bool fixDestinationColor)
+        {
+            foreach (var entity in BaseNetworkable.serverEntities)
+            {
+                var ioEntity = entity as IOEntity;
+                if (ioEntity == null)
+                    continue;
+
+                if (fixDestinationColor)
+                    CopySourceSlotColorsToDestinationSlots(ioEntity);
+
+                ProcessSourceEntity(ioEntity, networkUpdate);
+            }
+        }
+
+        private void ResetAllEntities(bool networkUpdate)
+        {
+            foreach (var entity in BaseNetworkable.serverEntities)
+            {
+                var destinationEntity = entity as IOEntity;
+                if (destinationEntity == null)
+                    continue;
+
+                foreach (var destinationSlot in destinationEntity.inputs)
+                {
+                    IOEntity sourceEntity;
+                    var sourceSlot = GetConnectedSourceSlot(destinationEntity, destinationSlot, out sourceEntity);
+                    if (sourceSlot == null)
+                        continue;
+
+                    ChangeSlotColor(sourceEntity, sourceSlot, destinationSlot.wireColour, networkUpdate);
+                }
+            }
         }
 
         private bool HasOtherMainInput(IOEntity ioEntity, IOSlot currentSlot)
@@ -170,17 +201,7 @@ namespace Oxide.Plugins
             return HasOtherMainInput(destinationEntity, destinationSlot);
         }
 
-        private void ProcessConnection(IOEntity sourceEntity, IOSlot sourceSlot, IOEntity destinationEntity, IOSlot destinationSlot)
-        {
-            var inputAmount = sourceEntity.GetPassthroughAmount(destinationSlot.connectedToSlot);
-
-            if (SufficientPowerOrFluid(destinationEntity, destinationSlot, inputAmount))
-                ChangeSlotColor(sourceEntity, sourceSlot, destinationSlot.wireColour);
-            else if (EitherEntityHasPermission(sourceEntity, destinationEntity, PermissionUse))
-                ChangeSlotColor(sourceEntity, sourceSlot, _pluginConfig.GetInsufficientColorForType(sourceSlot.type));
-        }
-
-        private void ProcessSourceEntity(IOEntity sourceEntity)
+        private void ProcessSourceEntity(IOEntity sourceEntity, bool networkUpdate = true)
         {
             foreach (var sourceSlot in sourceEntity.outputs)
             {
@@ -189,8 +210,36 @@ namespace Oxide.Plugins
                 if (destinationSlot == null)
                     continue;
 
-                ProcessConnection(sourceEntity, sourceSlot, destinationEntity, destinationSlot);
+                if (!EitherEntityHasPermission(sourceEntity, destinationEntity, PermissionUse))
+                    continue;
+
+                var inputAmount = sourceEntity.GetPassthroughAmount(destinationSlot.connectedToSlot);
+
+                if (SufficientPowerOrFluid(destinationEntity, destinationSlot, inputAmount))
+                {
+                    // Don't check for permission here since we want to be able to reset the color even if the player lost permission.
+                    ChangeSlotColor(sourceEntity, sourceSlot, destinationSlot.wireColour, networkUpdate);
+                }
+                else if (EitherEntityHasPermission(sourceEntity, destinationEntity, PermissionUse))
+                {
+                    ChangeSlotColor(sourceEntity, sourceSlot, _pluginConfig.GetInsufficientColorForType(sourceSlot.type), networkUpdate);
+                }
             }
+        }
+
+        private IEnumerator ResetColorsWhileSaving()
+        {
+            // Reset colors so they save without modification, in case an ungraceful shutdown does not invoke Unload() before saving.
+            TrackStart();
+            ResetAllEntities(networkUpdate: false);
+            TrackEnd();
+
+            yield return WaitWhileSaving;
+
+            // Restore dynamic colors, as if the plugin had just loaded.
+            TrackStart();
+            SetupAllEntities(networkUpdate: false, fixDestinationColor: false);
+            TrackEnd();
         }
 
         #endregion
