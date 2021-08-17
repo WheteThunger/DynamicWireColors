@@ -38,7 +38,7 @@ namespace Oxide.Plugins
                 if (ioEntity == null)
                     continue;
 
-                FixWireColors(ioEntity);
+                CopySourceSlotColorsToDestinationSlots(ioEntity);
                 ProcessSourceEntity(ioEntity);
             }
         }
@@ -47,17 +47,17 @@ namespace Oxide.Plugins
         {
             foreach (var entity in BaseNetworkable.serverEntities)
             {
-                var ioEntity = entity as IOEntity;
-                if (ioEntity == null)
+                var destinationEntity = entity as IOEntity;
+                if (destinationEntity == null)
                     continue;
 
-                foreach (var destinationSlot in ioEntity.inputs)
+                foreach (var destinationSlot in destinationEntity.inputs)
                 {
-                    var sourceEntity = destinationSlot.connectedTo.Get();
-                    if (sourceEntity == null)
+                    IOEntity sourceEntity;
+                    var sourceSlot = GetConnectedSourceSlot(destinationEntity, destinationSlot, out sourceEntity);
+                    if (sourceSlot == null)
                         continue;
 
-                    var sourceSlot = sourceEntity.outputs[destinationSlot.connectedToSlot];
                     ChangeSlotColor(sourceEntity, sourceSlot, destinationSlot.wireColour);
                 }
             }
@@ -84,18 +84,36 @@ namespace Oxide.Plugins
             return hookResult is bool && (bool)hookResult == false;
         }
 
-        private void FixWireColors(IOEntity sourceEntity)
+        private IOSlot GetConnectedSourceSlot(IOEntity destinationEntity, IOSlot destinationSlot, out IOEntity sourceEntity)
+        {
+            sourceEntity = destinationSlot.connectedTo.Get();
+            if (sourceEntity == null)
+                return null;
+
+            return sourceEntity.outputs[destinationSlot.connectedToSlot];
+        }
+
+        private IOSlot GetConnectedDestinationSlot(IOEntity sourceEntity, IOSlot sourceSlot, out IOEntity destinationEntity)
+        {
+            destinationEntity = sourceSlot.connectedTo.Get();
+            if (destinationEntity == null)
+                return null;
+
+            return destinationEntity.inputs[sourceSlot.connectedToSlot];
+        }
+
+        private void CopySourceSlotColorsToDestinationSlots(IOEntity sourceEntity)
         {
             // This fixes an issue where loading a save does not restore the input slot colors.
             // This workaround updates the input slot colors to match the output colors when the plugin loads.
             // Without this workaround, we can't use the input colors to know which color to revert back to.
             foreach (var sourceSlot in sourceEntity.outputs)
             {
-                var destinationEntity = sourceSlot.connectedTo.Get();
-                if (destinationEntity == null)
+                IOEntity destinationEntity;
+                var destinationSlot = GetConnectedDestinationSlot(sourceEntity, sourceSlot, out destinationEntity);
+                if (destinationSlot == null)
                     continue;
 
-                var destinationSlot = destinationEntity.inputs[sourceSlot.connectedToSlot];
                 if (destinationSlot.wireColour == WireColour.Default)
                     destinationSlot.wireColour = sourceSlot.wireColour;
             }
@@ -166,11 +184,11 @@ namespace Oxide.Plugins
         {
             foreach (var sourceSlot in sourceEntity.outputs)
             {
-                var destinationEntity = sourceSlot.connectedTo.Get();
-                if (destinationEntity == null)
+                IOEntity destinationEntity;
+                var destinationSlot = GetConnectedDestinationSlot(sourceEntity, sourceSlot, out destinationEntity);
+                if (destinationSlot == null)
                     continue;
 
-                var destinationSlot = destinationEntity.inputs[sourceSlot.connectedToSlot];
                 ProcessConnection(sourceEntity, sourceSlot, destinationEntity, destinationSlot);
             }
         }
