@@ -1,12 +1,12 @@
 ## Features
 
-- Automatically changes the color of electrical wires while they are providing 0 or insufficient power
-- Automatically changes the color of hoses while they are providing 0 fluid
-- Automatically restores the original wire or hose color when sufficient power or fluid is provided
+- Changes the color of electrical **wires** while they are providing 0 or insufficient power (default: red)
+- Changes the color of **hoses** while they are providing 0 fluid (default: red)
+- Restores the original **wire** or **hose** color when sufficient power or fluid starts flowing
 
 ## Permissions
 
-- `dynamicwirecolors.use` -- While the plugin is configured with `"RequiresPermission": true`, only wires and hoses connected to entities deployed by players with this permission will have dynamic colors.
+- `dynamicwirecolors.use` -- While the plugin is configured with `"RequiresPermission": true` (default), only wires and hoses connected to entities deployed by players with this permission will have dynamic colors.
 
 ## Configuration
 
@@ -16,7 +16,8 @@ Default configuration:
 {
   "InsufficientPowerColor": "Red",
   "InsufficientFluidColor": "Red",
-  "RequiresPermission": true
+  "RequiresPermission": true,
+  "AppliesToStaticEntities": false
 }
 ```
 
@@ -25,7 +26,8 @@ Default configuration:
 - `InsufficientFluidColor` -- Color to use while for hoses that are providing 0 fluid.
   - Allowed values: `"Default"` | `"Red"` | `"Green"` | `"Blue"` | `"Yellow"`
   - Note: `"Default"` is the same as `"Green"`
-- `RequiresPermission` (`true` or `false`) -- While `true`, wires and hoses are dyanmically colored only if one or both of the connected entities was deployed by a player with the corresponding permission. While `false`, all wires and hoses are eligible for dynamic colors, regardless of who placed the connected entities.
+- `RequiresPermission` (`true` or `false`) -- While `true` (default), wires and hoses are dyanmically colored only if one or both of the connected entities was deployed by a player with the corresponding permission. While `false`, all wires and hoses are eligible for dynamic colors, regardless of who placed the connected entities.
+- `AppliesToStaticEntities` (`true` or `false`) -- While `true`, wires and hoses connected to static entities, such as those at monuments, will be dynamically colored. This definition of "static" technically means entities that have `OwnerID` set to `0`, so this could potentially apply to entities spawned via plugins if those plugins do not assign an owner.
 
 ## Developer Hooks
 

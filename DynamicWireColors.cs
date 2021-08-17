@@ -103,11 +103,11 @@ namespace Oxide.Plugins
 
         private bool EntityHasPermission(IOEntity ioEntity)
         {
+            if (ioEntity.OwnerID == 0)
+                return _pluginConfig.AppliesToStaticEntities;
+
             if (!_pluginConfig.RequiresPermission)
                 return true;
-
-            if (ioEntity.OwnerID == 0)
-                return false;
 
             return permission.UserHasPermission(ioEntity.OwnerID.ToString(), PermissionUse);
         }
@@ -191,6 +191,9 @@ namespace Oxide.Plugins
 
             [JsonProperty("RequiresPermission")]
             public bool RequiresPermission = true;
+
+            [JsonProperty("AppliesToStaticEntities")]
+            public bool AppliesToStaticEntities = false;
 
             public WireColour GetInsufficientColorForType(IOType ioType)
             {
