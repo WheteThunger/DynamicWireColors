@@ -13,7 +13,7 @@ using static IOEntity;
 
 namespace Oxide.Plugins
 {
-    [Info("Dynamic Wire Colors", "WhiteThunder", "1.1.0")]
+    [Info("Dynamic Wire Colors", "WhiteThunder", "1.1.1")]
     [Description("Temporarily changes the color of wires and hoses while they are providing insufficient power or fluid.")]
     internal class DynamicWireColors : CovalencePlugin
     {
@@ -205,6 +205,9 @@ namespace Oxide.Plugins
         {
             foreach (var sourceSlot in sourceEntity.outputs)
             {
+                if (sourceSlot.type != IOType.Electric && sourceSlot.type != IOType.Fluidic)
+                    continue;
+
                 IOEntity destinationEntity;
                 var destinationSlot = GetConnectedDestinationSlot(sourceEntity, sourceSlot, out destinationEntity);
                 if (destinationSlot == null)
