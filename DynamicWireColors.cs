@@ -12,7 +12,7 @@ using static IOEntity;
 
 namespace Oxide.Plugins
 {
-    [Info("Dynamic Wire Colors", "WhiteThunder", "1.1.1")]
+    [Info("Dynamic Wire Colors", "WhiteThunder", "1.1.2")]
     [Description("Temporarily changes the color of wires and hoses while they are providing insufficient power or fluid.")]
     internal class DynamicWireColors : CovalencePlugin
     {
