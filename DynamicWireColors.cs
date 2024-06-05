@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
 using Newtonsoft.Json.Converters;
 using Oxide.Core;
 using System;
@@ -19,11 +18,11 @@ namespace Oxide.Plugins
     {
         #region Fields
 
-        private Configuration _pluginConfig;
+        private Configuration _config;
 
         private const string PermissionUse = "dynamicwirecolors.use";
 
-        private WaitWhile WaitWhileSaving = new WaitWhile(() => SaveRestore.IsSaving);
+        private WaitWhile WaitWhileSaving = new(() => SaveRestore.IsSaving);
 
         #endregion
 
@@ -66,15 +65,14 @@ namespace Oxide.Plugins
 
         private bool ChangeColorWasBlocked(IOEntity ioEntity, IOSlot slot, WireColour color)
         {
-            object hookResult = Interface.CallHook("OnDynamicWireColorChange", ioEntity, slot, color);
-            return hookResult is bool && (bool)hookResult == false;
+            return Interface.CallHook("OnDynamicWireColorChange", ioEntity, slot, color) is false;
         }
 
         #endregion
 
         #region Helper Methods
 
-        private IOSlot GetConnectedSourceSlot(IOEntity destinationEntity, IOSlot destinationSlot, out IOEntity sourceEntity)
+        private IOSlot GetConnectedSourceSlot(IOSlot destinationSlot, out IOEntity sourceEntity)
         {
             sourceEntity = destinationSlot.connectedTo.Get();
             if (sourceEntity == null)
@@ -83,7 +81,7 @@ namespace Oxide.Plugins
             return sourceEntity.outputs[destinationSlot.connectedToSlot];
         }
 
-        private IOSlot GetConnectedDestinationSlot(IOEntity sourceEntity, IOSlot sourceSlot, out IOEntity destinationEntity)
+        private IOSlot GetConnectedDestinationSlot(IOSlot sourceSlot, out IOEntity destinationEntity)
         {
             destinationEntity = sourceSlot.connectedTo.Get();
             if (destinationEntity == null)
@@ -99,8 +97,7 @@ namespace Oxide.Plugins
             // Without this workaround, we can't use the input colors to know which color to revert back to.
             foreach (var sourceSlot in sourceEntity.outputs)
             {
-                IOEntity destinationEntity;
-                var destinationSlot = GetConnectedDestinationSlot(sourceEntity, sourceSlot, out destinationEntity);
+                var destinationSlot = GetConnectedDestinationSlot(sourceSlot, out _);
                 if (destinationSlot == null)
                     continue;
 
@@ -109,23 +106,27 @@ namespace Oxide.Plugins
                 //   b) It would require that other parts of the plugin do the same checks.
                 // This can be changed if it turns out that some other plugin is using the destination slot color for special reasons.
                 if (destinationSlot.wireColour == WireColour.Gray)
+                {
                     destinationSlot.wireColour = sourceSlot.wireColour;
+                }
             }
         }
 
         private bool EntityHasPermission(IOEntity ioEntity)
         {
             if (ioEntity.OwnerID == 0)
-                return _pluginConfig.AppliesToUnownedEntities;
+                return _config.AppliesToUnownedEntities;
 
-            if (!_pluginConfig.RequiresPermission)
+            if (!_config.RequiresPermission)
                 return true;
 
             return permission.UserHasPermission(ioEntity.OwnerID.ToString(), PermissionUse);
         }
 
-        private bool EitherEntityHasPermission(IOEntity ioEntity1, IOEntity ioEntity2, string perm) =>
-            EntityHasPermission(ioEntity1) || EntityHasPermission(ioEntity2);
+        private bool EitherEntityHasPermission(IOEntity ioEntity1, IOEntity ioEntity2, string perm)
+        {
+            return EntityHasPermission(ioEntity1) || EntityHasPermission(ioEntity2);
+        }
 
         private void ChangeSlotColor(IOEntity ioEntity, IOSlot slot, WireColour color, bool networkUpdate)
         {
@@ -135,7 +136,9 @@ namespace Oxide.Plugins
             slot.wireColour = color;
 
             if (networkUpdate)
+            {
                 ioEntity.SendNetworkUpdate();
+            }
         }
 
         private void SetupAllEntities(bool networkUpdate, bool fixDestinationColor)
@@ -147,7 +150,9 @@ namespace Oxide.Plugins
                     continue;
 
                 if (fixDestinationColor)
+                {
                     CopySourceSlotColorsToDestinationSlots(ioEntity);
+                }
 
                 ProcessSourceEntity(ioEntity, networkUpdate);
             }
@@ -163,8 +168,7 @@ namespace Oxide.Plugins
 
                 foreach (var destinationSlot in destinationEntity.inputs)
                 {
-                    IOEntity sourceEntity;
-                    var sourceSlot = GetConnectedSourceSlot(destinationEntity, destinationSlot, out sourceEntity);
+                    var sourceSlot = GetConnectedSourceSlot(destinationSlot, out var sourceEntity);
                     if (sourceSlot == null)
                         continue;
 
@@ -208,8 +212,7 @@ namespace Oxide.Plugins
                 if (sourceSlot.type != IOType.Electric && sourceSlot.type != IOType.Fluidic)
                     continue;
 
-                IOEntity destinationEntity;
-                var destinationSlot = GetConnectedDestinationSlot(sourceEntity, sourceSlot, out destinationEntity);
+                var destinationSlot = GetConnectedDestinationSlot(sourceSlot, out var destinationEntity);
                 if (destinationSlot == null)
                     continue;
 
@@ -225,7 +228,7 @@ namespace Oxide.Plugins
                 }
                 else if (EitherEntityHasPermission(sourceEntity, destinationEntity, PermissionUse))
                 {
-                    ChangeSlotColor(sourceEntity, sourceSlot, _pluginConfig.GetInsufficientColorForType(sourceSlot.type), networkUpdate);
+                    ChangeSlotColor(sourceEntity, sourceSlot, _config.GetInsufficientColorForType(sourceSlot.type), networkUpdate);
                 }
             }
         }
@@ -249,7 +252,7 @@ namespace Oxide.Plugins
 
         #region Configuration
 
-        private class Configuration : SerializableConfiguration
+        private class Configuration : BaseConfiguration
         {
             [JsonProperty("InsufficientPowerColor")]
             [JsonConverter(typeof(StringEnumConverter))]
@@ -273,13 +276,11 @@ namespace Oxide.Plugins
             }
         }
 
-        private Configuration GetDefaultConfig() => new Configuration();
+        private Configuration GetDefaultConfig() => new();
 
-        #endregion
+        #region Configuration Helpers
 
-        #region Configuration Boilerplate
-
-        private class SerializableConfiguration
+        private class BaseConfiguration
         {
             public string ToJson() => JsonConvert.SerializeObject(this);
 
@@ -308,7 +309,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private bool MaybeUpdateConfig(SerializableConfiguration config)
+        private bool MaybeUpdateConfig(BaseConfiguration config)
         {
             var currentWithDefaults = config.ToDictionary();
             var currentRaw = Config.ToDictionary(x => x.Key, x => x.Value);
@@ -317,17 +318,14 @@ namespace Oxide.Plugins
 
         private bool MaybeUpdateConfigDict(Dictionary<string, object> currentWithDefaults, Dictionary<string, object> currentRaw)
         {
-            bool changed = false;
+            var changed = false;
 
             foreach (var key in currentWithDefaults.Keys)
             {
-                object currentRawValue;
-                if (currentRaw.TryGetValue(key, out currentRawValue))
+                if (currentRaw.TryGetValue(key, out var currentRawValue))
                 {
-                    var defaultDictValue = currentWithDefaults[key] as Dictionary<string, object>;
                     var currentDictValue = currentRawValue as Dictionary<string, object>;
-
-                    if (defaultDictValue != null)
+                    if (currentWithDefaults[key] is Dictionary<string, object> defaultDictValue)
                     {
                         if (currentDictValue == null)
                         {
@@ -335,7 +333,9 @@ namespace Oxide.Plugins
                             changed = true;
                         }
                         else if (MaybeUpdateConfigDict(defaultDictValue, currentDictValue))
+                        {
                             changed = true;
+                        }
                     }
                 }
                 else
@@ -348,20 +348,20 @@ namespace Oxide.Plugins
             return changed;
         }
 
-        protected override void LoadDefaultConfig() => _pluginConfig = GetDefaultConfig();
+        protected override void LoadDefaultConfig() => _config = GetDefaultConfig();
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
             try
             {
-                _pluginConfig = Config.ReadObject<Configuration>();
-                if (_pluginConfig == null)
+                _config = Config.ReadObject<Configuration>();
+                if (_config == null)
                 {
                     throw new JsonException();
                 }
 
-                if (MaybeUpdateConfig(_pluginConfig))
+                if (MaybeUpdateConfig(_config))
                 {
                     LogWarning("Configuration appears to be outdated; updating and saving");
                     SaveConfig();
@@ -378,8 +378,10 @@ namespace Oxide.Plugins
         protected override void SaveConfig()
         {
             Log($"Configuration changes saved to {Name}.json");
-            Config.WriteObject(_pluginConfig, true);
+            Config.WriteObject(_config, true);
         }
+
+        #endregion
 
         #endregion
     }

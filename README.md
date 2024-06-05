@@ -34,7 +34,7 @@ Default configuration:
 #### OnDynamicWireColorChange
 
 ```csharp
-bool? OnDynamicWireColorChange(IOEntity ioEntity, IOEntity.IOSlot slot, WireTool.WireColour color)
+object OnDynamicWireColorChange(IOEntity ioEntity, IOEntity.IOSlot slot, WireTool.WireColour color)
 ```
 
 - Called when this plugin is about to change the wire or hose color of an entity's slot
