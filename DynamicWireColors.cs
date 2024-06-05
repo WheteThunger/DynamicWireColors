@@ -108,7 +108,7 @@ namespace Oxide.Plugins
                 //   a) It shouldn't be necessary.
                 //   b) It would require that other parts of the plugin do the same checks.
                 // This can be changed if it turns out that some other plugin is using the destination slot color for special reasons.
-                if (destinationSlot.wireColour == WireColour.Default)
+                if (destinationSlot.wireColour == WireColour.Gray)
                     destinationSlot.wireColour = sourceSlot.wireColour;
             }
         }
