@@ -22,10 +22,9 @@ Default configuration:
 ```
 
 - `InsufficientPowerColor` -- Color to use for electrical wires that are providing 0 or insufficient power.
-  - Allowed values: `"Default"` | `"Red"` | `"Green"` | `"Blue"` | `"Yellow"` | `"LightBlue"` | `"Orange"` | `"Pink"` | `"Purple"` | `"White"`
+  - Allowed values: `"Gray"` | `"Red"` | `"Green"` | `"Blue"` | `"Yellow"` | `"LightBlue"` | `"Orange"` | `"Pink"` | `"Purple"` | `"White"`
 - `InsufficientFluidColor` -- Color to use while for hoses that are providing 0 fluid.
-  - Allowed values: `"Default"` | `"Red"` | `"Green"` | `"Blue"` | `"Yellow"` | `"LightBlue"` | `"Orange"` | `"Pink"` | `"Purple"` | `"White"`
-  - Note: `"Default"` is the same as `"Green"`
+  - Allowed values: `"Gray"` | `"Red"` | `"Green"` | `"Blue"` | `"Yellow"` | `"LightBlue"` | `"Orange"` | `"Pink"` | `"Purple"` | `"White"`
 - `RequiresPermission` (`true` or `false`) -- While `true` (default), wires connecting player-owned entities will only be dynamically colored if at least one of the entities was deployed by a player with the `dynamicwirecolors.use` permission. While `false`, wires connected to any player-owned entity will be dynamically colored, as though you had granted the permission to all players.
 - `AppliesToUnownedEntities` (`true` or `false`) -- While `true`, wires and hoses connecting unowned entities (entities that have `OwnerID` set to `0`) will be dynamically colored. For example, this applies to entities at monuments, as well as to modular car tanker modules. While `false` (default), wires connecting unowned entities will not be affected by the plugin.
 
