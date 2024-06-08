@@ -12,7 +12,7 @@ using static IOEntity;
 
 namespace Oxide.Plugins
 {
-    [Info("Dynamic Wire Colors", "WhiteThunder", "1.1.2")]
+    [Info("Dynamic Wire Colors", "WhiteThunder", "1.1.3")]
     [Description("Temporarily changes the color of wires and hoses while they are providing insufficient power or fluid.")]
     internal class DynamicWireColors : CovalencePlugin
     {
@@ -78,7 +78,7 @@ namespace Oxide.Plugins
             if (sourceEntity == null)
                 return null;
 
-            return sourceEntity.outputs[destinationSlot.connectedToSlot];
+            return sourceEntity.outputs.ElementAtOrDefault(destinationSlot.connectedToSlot);
         }
 
         private IOSlot GetConnectedDestinationSlot(IOSlot sourceSlot, out IOEntity destinationEntity)
@@ -87,7 +87,7 @@ namespace Oxide.Plugins
             if (destinationEntity == null)
                 return null;
 
-            return destinationEntity.inputs[sourceSlot.connectedToSlot];
+            return destinationEntity.inputs.ElementAtOrDefault(sourceSlot.connectedToSlot);
         }
 
         private void CopySourceSlotColorsToDestinationSlots(IOEntity sourceEntity)
